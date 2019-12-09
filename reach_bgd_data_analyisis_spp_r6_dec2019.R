@@ -86,7 +86,7 @@ sppdap_hh<-sppdap %>% filter(level=="household")
 sppdap_na_replace<-sppdap %>% filter(!is.na(na_replace)& na_replace!="True NA" )
 sppdap_na_replace
 
-
+butteR::auto_detect_select_multiple()
 # since there are only 5 cases and each case  NA  = "no" I am just going too replace it in the data set
 HH_svy_ob$variables[,unique(sppdap_na_replace$variable)]<-purrr::map( HH_svy_ob$variables[,unique(sppdap_na_replace$variable)], function(x)ifelse(is.na(x), "no",x))
 
@@ -282,6 +282,12 @@ write.csv(individual_double_subset_all,paste0(output_path,isodate,"_Indiv_Analys
 prop.table(svytable(~ind_gender+i.age_group2, ind_svy_ob)) %>% data.frame()%>%
   mutate(age_group2=paste0("age_", i.age_group2)) %>%
   write.csv(paste0(output_path,isodate,"_Indiv_age_sex_breakdown.csv"))
+
+
+#ONE PROP TABLE BREAKDOWN.
+prop.table(svytable(~ind_gender+camp+i.age_group2, ind_svy_ob)) %>% data.frame()%>%
+  mutate(age_group2=paste0("age_", i.age_group2)) %>% arrange(camp) %>% 
+  write.csv(paste0(output_path,isodate,"_Indiv_age_sex_breakdown_by_camp.csv"))
 
 #GENERATE SOME QUICK GRAPHS FOR AO TO INVESTIGATE/ CHECK FOR WEIRD DATA.
 rmarkdown::render('preliminary_analysis_graphics_for_quick_review.Rmd')
