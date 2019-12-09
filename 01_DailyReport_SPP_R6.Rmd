@@ -1,0 +1,717 @@
+---
+title: "SPP R6"
+author: "BGD GIS DATA UNIT"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+---
+
+```{r setup, include=FALSE, warning = FALSE, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message=FALSE,
+                      warning = FALSE)
+library(knitr)
+library(rgdal)
+library(gsubfn)
+library(HighFrequencyChecks)
+library(stringi)
+library(dplyr)
+library(data.table)
+library(kableExtra)
+library(lubridate)
+library(DescTools)
+library(tidyr)
+library(ggplot2)
+library(ggthemes)
+library(rgdal)
+source("../functions/ActivatePaths.R")
+
+
+
+audit_zip_dir<-"data_checks/04_audit"
+zip_download_info <- fileSnapshot(audit_zip_dir)
+audit_zipfile<-paste0(audit_zip_dir,"/", rownames(zip_download_info$info[which.max(zip_download_info$info$mtime),]))
+
+'%ni%' <- Negate('%in%')
+
+
+ 
+
+
+SampleSize<-read.csv("data_checks/03_samples/SampleSize.csv", stringsAsFactors = FALSE)
+# setwd("D:/Data/DataAnalysis/WASH_HH_FollowUp2/HFC/AllTill2019-05-26")
+# setwd("C:\\01_REACH_BGD\\02_GIS_DataUnit\\99_DataAnalysis\\WASH_HH_FollowUp2\\HFC\\AllTill2019-05-26")
+# Header_file_name<-paste0("02_daily_data_csv/",stringr::str_replace_all(Sys.Date(),"-", ""),"_Header.csv")
+# Content_file_name<-paste0("02_daily_data_csv/",stringr::str_replace_all(Sys.Date(),"-", ""),"_Content.csv")
+
+# HeaderP<-read.csv("data_checks/Header.csv", stringsAsFactors = FALSE, na.strings=c("", " ", NA))
+Header<-read.csv("data_checks/Header.csv", stringsAsFactors = FALSE, na.strings=c("", " ", NA))
+
+# Header$survey_date
+Content<-read.csv("data_checks/Content.csv", stringsAsFactors = FALSE, na.strings=c("", " ", NA))
+
+
+
+if(data_collection_day_number==1){
+date_reported<-date_current_download
+Header$reported_date<-date_reported
+"data_checks/02_daily_data_csv/"
+csv_file_name<-paste0("data_checks/02_daily_data_csv/",stringr::str_replace_all(date_reported,"-",""),"_Header.csv")
+write.csv(Header, csv_file_name)
+}
+
+if(data_collection_day_number>1){
+  date_reported<-date_current_download
+  csv_file_name_previous<-paste0("data_checks/02_daily_data_csv/",stringr::str_replace_all(date_previously_downloaded,"-",""),"_Header.csv")
+  
+  previous_data<-read.csv(csv_file_name_previous, stringsAsFactors = FALSE, na.strings=c("", " ", NA))
+  previous_data<-previous_data %>% select(X_index, reported_date)
+  
+  Header<-Header %>% dplyr::left_join(previous_data, by= "X_index")
+  Header$reported_date<- if_else(is.na(Header$reported_date),date_reported %>% ymd(),Header$reported_date %>% ymd())
+  csv_file_name_current<-paste0("data_checks/02_daily_data_csv/",stringr::str_replace_all(date_current_download,"-",""),"_Header.csv")
+  write.csv(Header, csv_file_name_current)
+  
+}
+
+# Loads needed shapefiles qw
+
+
+sampling_wd<-"data_checks/03_samples/merged.kml"
+# ogrListLayers(shp_wd)
+# shp_wd<-"C:\\01_REACH_BGD\\02_GIS_DataUnit\\99_DataAnalysis\\WASH_HH_FollowUp2\\HFC\\GIS"
+boundary_gdb<- "GIS"
+adm<-readOGR(boundary_gdb,"190310_Outline_Rohingya_Refugee_Camp_A1",stringsAsFactors = FALSE)
+ogrListLayers(sampling_wd)
+pts<-readOGR(sampling_wd,"Layer #0")
+# marketDist<-readOGR(shp_wd, "DistanceFromMarket", stringsAsFactors = FALSE)
+
+# correction for uppercase/lowercase in the site name (should not happen if we can use the same name in the shapefile/kobo/sample size)
+# Header$camp_id<-tolower(Header$camp_id)
+# Header$camp_id<-stri_replace_all_fixed(Header$camp_id,"_"," ")
+# SampleSize$camp_name<-tolower(SampleSize$camp_name)
+# adm$New_Camp_N<-tolower(adm$New_Camp_N)
+#^ not relevant-- no camp id was cllected
+# Header <- subset(Header, (enumerator_id %ni% c(106,110,85,152,138)) | (upload_date!='2019-07-04'))
+
+df_coord<-c("X_gps_reading_longitude","X_gps_reading_latitude")
+
+# Initialize common variables
+#admin<-admin
+#df<-sample_dataset
+df_site<-"camp_id"
+
+
+# admin_site<-"New_Camp_N"
+consent<-"consent_overall"
+
+reportcol<-c("enumerator_id","X_index")
+buffer<-25
+uuid<-"X_index"
+upload_date<-"upload_date"
+dates<-c("survey_start","end_survey")
+# startdate<-"2019-20-09"
+mindur<-30
+enumid<-"enumerator_id"
+otherpattern<-"_other$"
+surveydte<-"survey_date"
+kobodte<- "kobo_rec_date"
+dteformat<-"%Y-%m-%d"
+
+# questions<-c("unsafe_men[.]",
+#              "unsafe_women[.]",
+#              "unsafe_boys[.]",
+#              "unsafe_girls[.]",
+#              "security_interventions[.]")
+# minans<-3
+# aux_path_link<-"Dropbox\\REACH_BGD\\REACH\\Ongoing\\70DQR - Joint MSNAs\\02 Data Collection and checking\\02_Auxilliary_Files"
+sdvalue<-2
+
+# write.csv(Header, "C:\\01_REACH_BGD\\02_GIS_DataUnit\\02_Themes\\03_Protection\\SPP\\Round_5\\04_data_collection\\01_pilot\\HeaderN\\HeaderN.csv")
+# write.csv(Content,"C:\\01_REACH_BGD\\02_GIS_DataUnit\\02_Themes\\03_Protection\\SPP\\Round_5\\04_data_collection\\01_pilot\\HeaderN\\ContentN.csv")
+```
+
+
+## Daily Report
+
+### Tracking
+
+Count of interviews completed per camp
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+
+# Header$date<-as.Date(Header$survey_start)
+HeaderSp<-Header
+coordinates(HeaderSp)<-df_coord
+proj4string(HeaderSp)<-proj4string(adm)
+hspj<-data.frame(Header,over(HeaderSp, adm))
+
+
+hh_to_output<-hspj %>% select(survey_date:New_Camp_N)
+hh_to_output<- hh_to_output %>% select(- contains("gps"))
+write.csv(hh_to_output, paste0(daily_data_path,"//", stringr::str_replace_all(date_current_download,"-", ""),"_HH.csv"))
+write.csv(Content, paste0(daily_data_path,"//", stringr::str_replace_all(date_current_download,"-", ""),"_Indiv.csv"))
+hspj$camp_id<-ifelse(is.na(hspj$New_Camp_N), "out_of_camp", hspj$New_Camp_N)
+hspjy<-hspj %>% filter(consent_overall=="yes")
+
+
+
+ss2<-SampleSize %>% 
+  mutate(
+    points_given=SS10,
+    points_need=SS
+    
+    ) %>% 
+  select(Camps, points_need,points_given) %>% 
+  filter(!is.na(points_given))
+
+complete_by_camp<-hspj %>% 
+  group_by(camp_id) %>% 
+  summarise(
+    num_complete=sum(consent_overall=="yes"),
+    number_pts=n()) %>% 
+  full_join(ss2,by=c("camp_id"= "Camps"), all.x=TRUE, all.y=TRUE) %>% 
+  mutate(
+    points_visited=ifelse(is.na(number_pts),0,number_pts),
+    number_complete= ifelse(is.na(num_complete),0,num_complete),
+    points_needed=points_need,
+    points_remaining=points_need-number_complete,
+  ) %>% 
+  select(camp_id, points_visited,number_complete, points_needed, points_given, points_remaining) %>% 
+  arrange(camp_id)
+
+
+# complete_by_camp<-hspjy %>%
+#   left_join(SampleSize,by = c("camp_id" = "Camp_Name")) %>% 
+#   group_by(camp_id) %>%
+#   summarise(number_complete= n(),
+#             points_needed=unique(points_needed),
+#             points_given=unique(number_points_w_buffer),
+#             points_remaining=points_needed-number_complete)
+
+
+
+# complete_by_upazila<- hspjy %>% 
+#     left_join(SampleSize,by = c("camp_id" = "Camp_Name")) %>% 
+#   group_by(Upazila) %>%
+#   summarise(number_complete= n()) %>% 
+#   mutate(
+#     points_needed=400,
+#     points_remaining=points_needed-number_complete)
+# # list[dts,err]<-chk1di_GIS_site(adm, Header, df_site, df_coord, admin_site, consent, reportcol, TRUE)
+# Header<-dts
+
+
+# kable(complete_by_upazila, "latex", longtable = T, booktabs = T, linesep = "", caption="Progress Tracking By Upazilla") %>% kable_styling(position = "center")
+complete_by_camp %>% 
+  kable(longtable = T, booktabs = T, linesep = "", caption= "Progress Tracking By Camp") %>% kable_styling(position = "center")
+
+
+```
+
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+reportlog<-chk7bi_nb_status(Header,"reported_date", dteformat, consent)
+# reportlog$total<-reportlog$no+reportlog$not_elig+reportlog$yes
+
+#GET RID OF CONSENT VERIFICATION AND FLIP COLUMN NAMES FOR CONSENT INTENTION
+
+kable(reportlog, booktabs = T, linesep = "", caption="Surveys Per Day By Consent Status") %>% kable_styling(position = "center")
+
+
+
+```
+
+
+
+```{r eval=TRUE, echo=FALSE, results='hide'}
+HeaderYes<-filter(Header, consent_overall=="yes")
+
+HeaderNo<-filter(Header, consent_overall!="yes")
+Aggregated1 <- inner_join(HeaderYes[,c("enumerator_id","X_uuid","X_index")],Content,by=c("X_index"="X_parent_index"))
+#NO CONTAINER
+# Aggregated2 <- inner_join(HeaderYes[,c("enumerator_id","X_uuid","camp_id")],Container,by=c("X_index"="X_parent_index"))
+```
+
+### GIS Target Location Check
+
+Points > **`r buffer`** meters away from the random sample points
+
+```{r eval=FALSE, echo=FALSE, results='asis',eval=FALSE}
+
+reportcol2<-c("reported_date","enumerator_id","X_uuid", "New_Camp_N")
+list[dts,err]<-chk1dii_GIS_Xm(pts, hspjy, df_coord, buffer, consent, reportcol2, TRUE)
+
+kable(err, longtable = T, booktabs = T, linesep = "", caption= "Problematic Points Based on Location") %>% kable_styling(position = "center")
+
+```
+
+````{r eval=TRUE, echo=FALSE, results='asis'}
+
+###measure distance between poitns##############################################
+
+
+Header_sf<-sf::st_as_sf(HeaderSp)
+Header_sf<-Header_sf %>% 
+  filter(consent_overall=="yes")
+target_sf<-sf::st_as_sf(pts)
+
+#### FOR DISTANCE CALCULATION###################################################
+Header_sf<-Header_sf %>% filter(reported_date==date_current_download)
+dist_list<-list()
+for(i in seq_len(nrow(Header_sf))){
+    closest <- target_sf[which.min(
+    sf::st_distance(target_sf, Header_sf[i,])),]
+    dist_list[[i]]<-data.frame(X_uuid=Header_sf[i, "X_uuid"],dist=sf::st_distance( Header_sf[i,], closest), target_name= closest$Name)
+}
+dist_df<-do.call("rbind", dist_list)
+
+outside_buffer<-dist_df %>% 
+  filter(as.numeric(dist)>buffer) %>% 
+  select(X_uuid=X_uuid.X_uuid, -X_uuid.geometry,dist,target_name) %>% 
+  left_join(hspjy %>% select(X_uuid, enumerator_id,New_Camp_N), by="X_uuid") %>% 
+  select(X_uuid, enumerator_id,New_Camp_N, everything())
+
+if(nrow(outside_buffer)>0){
+  kable(outside_buffer, longtable = T, booktabs = T, linesep = "", caption= paste0("Problematic Points-",date_current_download,"- Based on Location")) %>% kable_styling( position = "center")
+} else {
+  cat(paste0("No surveys completed on ", date_current_download, " that were more than ", buffer, " m away from the target point"))
+}
+
+```
+
+
+### Basic (pointless) Checks
+
+1.) Check that the surveys are completed
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+list[dts,err]<-chk1a_interview_completed(Header, consent, dates, reportcol, TRUE)
+Header<-dts
+if(nrow(err)>0){
+  kable(err, longtable = T, booktabs = T, linesep = "") %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+} else {
+  cat("no incomplete questionnaires")
+}
+```
+
+
+2.) Check that the surveys have a consent recorded
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+list[dts,err]<-chk1b_survey_consent(Header, consent, reportcol, TRUE)
+Header<-dts
+if(nrow(err)>0){
+  kable(err, longtable = T, booktabs = T, linesep = "") %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+} else {
+  cat("no errors")
+}
+```
+
+
+
+3.) Duplicated UUIDs?
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+list[dts,err]<-chk2b_unique_id(HeaderYes, uuid, consent, reportcol, TRUE)
+HeaderYes<-dts
+if(nrow(err)>0){
+  kable(err, longtable = T, booktabs = T, linesep = "") %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+} else {
+  cat("no duplicaed uuids")
+}
+```
+
+
+
+### Survey Duration Checks
+
+
+```{r eval=TRUE, echo=FALSE, results='asis', warning=FALSE}
+
+audit_yes<-butteR::load_audit(data= HeaderYes,
+             path.to.zip=audit_zipfile,
+             path.to.unzip=path_unzip,
+             copy.zip=TRUE,
+             path.to.copy.zip=copy_zip_to,
+             filter.column="consent_overall",
+             filter.on= "yes",
+             uuid.column="X_uuid",
+             delete.unzipped=FALSE,
+             days.ago.reported=0)
+
+
+dfl<-list()
+for (i in 1: length(audit_yes)){
+  d<-audit_yes[[i]]
+  start_question<- d %>% filter(node == paste0(audit_node,"Meta_data/consent_overall") & !is.na(event)) %>% 
+    select(end) 
+  start_question<-min(start_question$end)
+  end_question<-d %>% filter(node==paste0(audit_node,"thankyou")& !is.na(event)) %>% 
+    select(start)
+  end_question<-max(end_question$start)
+  duration_ms<-end_question-start_question
+  duration_secs<-duration_ms/1000
+  duration_minutes<- round(duration_secs/60,1)
+  dfl[[i]]<-data.frame(uuid=names(audit_yes)[i],start_question, end_question,duration_ms=duration_ms,durations_secs=duration_secs,duration_minutes= duration_minutes)
+}
+
+duration_df2<-do.call("rbind", dfl)
+
+
+htdf<-hspjy %>%  
+  left_join(duration_df2, by= c("X_uuid"="uuid")) 
+
+
+
+infinite_duration<-htdf[!is.finite(htdf$duration_minutes), c("X_uuid","start_question","end_question","duration_minutes")]
+htdf<-htdf[is.finite(htdf$duration_minutes),]
+
+problem_durations<-round(nrow(infinite_duration)/nrow(hspjy)*100,1)
+cat(paste0("Durations could not be calculated for ", problem_durations," % of surveys. UUIDS written to dropbox- please investigate audit files"))
+
+aux_file_path_infinite_duration<- paste0(duration_data_path,"\\", date_current_download,"_infnite_durations_from_audit.csv")
+write.csv(infinite_duration,aux_file_path_infinite_duration)
+```
+
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+
+quick_surveys<-htdf[htdf$duration_minutes< mindur,]
+
+quick_surveys$enumerator_id
+quick_surveys$family_size
+quick_survey_daily<-quick_surveys %>% group_by(reported_date, enumerator_id) %>% 
+  select(reported_date, enumerator_id, X_uuid,duration_minutes, family_size, New_Camp_N) %>% arrange(reported_date)
+
+quick_survey_information<-data.frame(quick_surveys$enumerator_id,quick_surveys$X_uuid, quick_surveys$duration_minutes)
+
+duration_by_enumerator <- htdf %>%
+  mutate(zscore = scale(duration_minutes),
+  zscoreLog = scale(log(duration_minutes))) %>%
+  group_by(enumerator_id) %>%
+  summarise(
+  number_surveys=n(),  
+  mean_duration = mean(duration_minutes),
+  median_duration = median(duration_minutes)
+  ) %>%
+  ungroup %>%
+  mutate(
+  difference_from_mean = mean_duration - mean(htdf$duration_minutes),
+  difference_from_median = median_duration - median(htdf$duration_minutes)
+  )
+
+
+quick_survey_daily<-subset(quick_survey_daily,reported_date==date_current_download)
+kable(quick_survey_daily, longtable = T, booktabs = T, linesep = "",
+      caption=paste0("Enumerators That Completed a Full Survey In Less Than ",mindur, " minutes")) %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+
+```
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+t <- subset(quick_survey_daily, duration_minutes < 20)
+kable(t, longtable = T, booktabs = T, linesep = "",
+      caption=paste0("Enumerators That Completed a Full Survey In Less Than 20 minutes")) %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+```
+
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+t <- subset(quick_survey_daily, duration_minutes >= 20 & duration_minutes < 25 & family_size >= 4)
+kable(t, longtable = T, booktabs = T, linesep = "",
+      caption=paste0("Enumerators That Completed a Full Survey between 20 and 25 minutes with family size more than 4")) %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+```
+
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+t <- subset(quick_survey_daily, duration_minutes >= 25 & duration_minutes < 30 & family_size >= 7)
+kable(t, longtable = T, booktabs = T, linesep = "",
+      caption=paste0("Enumerators That Completed a Full Survey between 25 and 30 minutes with family size more than 7")) %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+```
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+kable(duration_by_enumerator, longtable = T, booktabs = T, linesep = "", caption= "Duration Statistics By Enumerator (minutes)") %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+
+```
+
+
+
+### Outlier Checks
+
+
+```{r eval=TRUE, echo=FALSE, results='asis', fig.align="center"}
+#NUMERIC NFI OUTLIER CHECK
+
+hspjy[,c("expenditure_clothes","expenditure_food","expenditure_health")]<-purrr::map(hspjy[,c("expenditure_clothes","expenditure_food","expenditure_health")],function(x)ifelse(x==999, NA,x))
+
+expenditure_outliers<-hspjy %>% 
+  mutate(
+    expenditure_total= expenditure_clothes+ expenditure_food+expenditure_health,
+    exp_clothes_outlier= ifelse(expenditure_clothes>10000 | expenditure_clothes %in% seq(1,100,1),1,0),
+    exp_food_outlier= ifelse(expenditure_food>10000 | expenditure_food %in% seq(1,100,1),1,0),
+    exp_health_outlier= ifelse(expenditure_health>10000 | expenditure_health %in% seq(1,100,1),1,0),
+    # expenditure_high= ifelse(expenditure_total>10000,1,0),
+    # expenditure_low= ifelse(expenditure_total<100,1,0)
+    ) %>% 
+  filter(exp_clothes_outlier==1| exp_food_outlier==1| exp_health_outlier==1) %>% 
+  select(instance_name, 
+         reported_date,
+         enumerator_id,
+         expenditure_clothes,
+         expenditure_food,
+         expenditure_health,
+         expenditure_total)
+rent_outliers<-hspjy %>% 
+  mutate(
+    rent_outliers=ifelse(rent_increase_howmuch>5000,1,0)
+    ) %>%
+  filter(rent_outliers==1) %>% 
+   select(instance_name, 
+         reported_date,
+         enumerator_id,
+         rent_outliers)
+  
+
+# reportlog<-chk4d_outliers(Header,sdvalue,reportcol,enumid,FALSE)
+# reportlog <- subset(reportlog, ind %nlike% "X_")
+if (nrow(expenditure_outliers)>0){
+  expenditure_outliers<-subset(expenditure_outliers,reported_date==date_current_download)
+kable(expenditure_outliers, longtable = T, booktabs = T, linesep = "", caption= "Total Expenditure Outliers") %>% kable_styling(latex_options = c("repeat_header"), position = "center")}else cat( "100< all ependitures> 10,000 taka")
+
+if (nrow(rent_outliers)>0){
+expenditure_outliers<-subset(expenditure_outliers,reported_date==date_current_download)
+kable(rent_outliers, longtable = T, booktabs = T, linesep = "") %>% kable_styling(latex_options = c("repeat_header"), position = "center")}else cat("no rent increases > 5000 taka")
+
+```
+
+### Check Health Expenditures and Health Coping
+
+```{r}
+health_coping_expenditure_contradiction<- hspjy %>% 
+  mutate(
+    at_least_one_health_coping=if_else(health_coping_strategy.take_loan==1|
+      health_coping_strategy.private_financial_support==1|
+      health_coping_strategy.borrow_money==1|
+      health_coping_strategy.sell_assets==1,1,0,)
+  ) %>% filter(at_least_one_health_coping==1 & (expenditure_health==0|is.na(expenditure_health)))
+         
+if (nrow(health_coping_expenditure_contradiction)>0){
+kable(health_coping_expenditure_contradiction, longtable = T, booktabs = T, linesep = "", caption= "Total Expenditure Outliers") %>% kable_styling(latex_options = c("repeat_header"), position = "center")}else cat( "No people with 0 health expenses and any of the following coping mechanisms: take_loan, financial_support, borrow_money, or sell_assets")
+```
+
+### HOH Gender/Age Coherence With Repeat Loop Check
+
+```{r}
+hspjy$gender_to_check<-ifelse(!is.na(hspjy$respondent_gender),hspjy$respondent_gender,hspjy$hoh_gender)
+hspjy$age_to_check<-ifelse(!is.na(hspjy$respondent_age),hspjy$respondent_age,hspjy$hoh_age)
+inconsistent_main_repeat_gender_age<-butteR::check_main_repeat_consistency(main_dataset = hspjy,main_col1 = "gender_to_check", 
+                                      main_col2 = "age_to_check",
+                                      main_uuid = "X_index",
+                                      repeat_dataset = Content,
+                                      repeat_col1 = "ind_gender",
+                                      repeat_col2 = "ind_age",
+                                      repeat_uuid =  "X_parent_index")
+
+if (nrow(inconsistent_main_repeat_gender_age)>0){
+kable(inconsistent_main_repeat_gender_age, longtable = T, booktabs = T, linesep = "", caption= "Surveys with inconsistent gender  and ages between main and repeat loop") %>% kable_styling(latex_options = c("repeat_header"), position = "center")}else cat( "No surveys with contradictory age/gender data between main and repeat loop")
+
+
+
+````
+
+```{r eval=FALSE, echo=FALSE, results='asis'}
+#TRACKING SHEET CODE
+# sf_site="camp_name"
+# sf_target="target_sample"
+# sf_nbpts="number_pts"
+# formul=c("done-no-not_eligible-deleted","done-no-not_eligible-deleted-target_sample")
+# colorder=c("site","target_sample","number_pts","done","not_eligible","no","deleted","yes","final","variance")
+# hspj$camp_id<-hspj$New_Camp_N
+# hspj$camp_id %in% SampleSize$camp_name
+# hspj$camp_id %>% class()
+# SampleSize$camp_name
+# hspj[,"camp_id"]
+# class(hspj)
+# 
+# reportlog<-chk7bii_tracking(hspj, SampleSize, "camp_id", "camp_name", "consent_overall", "target_sample", "number_pts",c("done-no-not_eligible-deleted","done-no-not_eligible-deleted-target_sample"), c("site","target_sample","number_pts","done","not_eligible","no","deleted","yes","final","variance"))
+# 
+# reportlog<-chk7bii_tracking(hspj, SampleSize, df_site, sf_site, consent, sf_target, sf_nbpts, formul, colorder)
+# kable(reportlog, "latex", booktabs = T, linesep = "") %>% kable_styling(position = "center")
+```
+
+
+### Enumerators checks
+
+Percentage of survey per consent status by enumerator
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+reportlog<-chk6a_refusal(Header, consent, enumid)
+
+# Header$consent_intentions
+kable(reportlog, longtable = T, booktabs = T, linesep = "") %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+```
+
+
+#### NA Response Rate, Other Response Frequncy  Table, and Distinct Values Per Question
+
+Please find the  auxiliary tables in the Dropbox
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+
+
+#do HH first
+HH_non_response_rate_per_question<-butteR::get_na_response_rates(data = HeaderYes)
+Individual_non_response_rate_per_question<-butteR::get_na_response_rates(data = Content)
+
+aux_file_path_na_hh<- paste0(aux_path_na,"\\", date_current_download,"_NA_ResponseRate_HHLevel.csv")
+aux_file_path_na_indiv<- paste0(aux_path_na,"\\", date_current_download,"_NA_ResponseRate_INDIVLevel.csv")
+
+write.csv(HH_non_response_rate_per_question,aux_file_path_na_hh)
+write.csv(Individual_non_response_rate_per_question,aux_file_path_na_indiv)
+
+```
+
+
+```{r eval=TRUE, echo=FALSE, results='asis'}
+reportlog<-chk4bii_distinct_values(Aggregated1, enumid, TRUE)
+reportlog2<-chk4bii_distinct_values(Header, enumid, TRUE)
+write.csv(reportlog, paste0(aux_path_distinct,"\\","Indiv_DistinctValues_Content", date_current_download, ".csv"))
+write.csv(reportlog2, paste0(aux_path_distinct,"\\","HH_DistinctValues_Content", date_current_download, ".csv"))
+
+```
+
+
+
+### Other By Enumerator
+```{r eval=TRUE, echo=FALSE, results='asis'}
+
+
+# hho<-HeaderYes %>% 
+#   dplyr::select(X_uuid,ends_with("_other"), ends_with("_Other"))
+# 
+# num_unique<-sapply(hho[,2:ncol(hho)], function(x) length(unique(x)))
+# unique_gr1<-which(num_unique!=1)
+# hho2<-hho[,c("X_uuid",names(unique_gr1))]
+# 
+# # hho2<-hho
+# colnames(hho2[,2:ncol(hho2)])<-paste0(colnames(hho2[,2:ncol(hho2)]),"_", 1:ncol(hho2[,2:ncol(hho2)]))
+# 
+# vlist<-list()
+# for(i in 1:ncol(hho2[,2:ncol(hho2)])){
+#   
+#   v1<-hho2 %>% 
+#     group_by_(colnames(hho2[,2:ncol(hho2)]))[i]) %>% 
+#     count() %>% 
+#     mutate(question= colnames(hho2)[i])
+#   colnames(v1)<-c("X_uuid", "Response", "Frequency", "Question")
+#   v1<-sapply(v1, as.character) %>% data.frame()
+#   vlist[[i]]<-v1}
+# 
+# 
+# vdf<-do.call("rbind", vlist)  
+# other_response_df<- vdf %>% dplyr::select(Question, Response, Frequency)  
+# aux_file_path_other_hh<- paste0(aux_path_other,"\\", date_current_download,"_OtherResponses_HHLevel.csv")
+# write.csv(other_response_df, aux_file_path_other_hh)
+
+
+
+hho2<-HeaderYes %>% 
+  dplyr::select(X_uuid,reported_date, enumerator_id,ends_with("_other"), ends_with("_Other"))
+
+hho3<-hho2[rowSums(is.na(hho2[,4:ncol(hho2)]))!=ncol(hho2[,4:ncol(hho2)]),]
+# hho4<-gather(hho3,enumerator_id,bathe_male_other:assist_complaint_other )
+other_table<-hho3 %>% 
+  gather("question", "value", 4:ncol(hho3)) %>% 
+  filter(!is.na(value)) %>% 
+  arrange(reported_date, enumerator_id)
+
+
+
+kable(other_table, longtable = T, booktabs = T, linesep = "", caption= "OTHER answers by Date and Enumerator ID") %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+
+# t <- data.frame(enu_id=Aggregated1$enumerator_id, Aggregated1[,colnames(Aggregated1[,sapply(Aggregated1, typeof)=="character"])])
+# reportlog<-chk4biv_others_values(t, otherpattern, "enu_id", TRUE)
+# write.csv(reportlog, paste0("OtherValues_Content", Sys.Date(), ".csv"))
+
+# cco<-Content %>% 
+#   dplyr::select(ends_with("_other"), ends_with("_Other"))
+# 
+# num_unique<-sapply(cco, function(x) length(unique(x)))
+# unique_gr1<-which(num_unique!=1)
+# cco2<-cco[,names(unique_gr1)]
+# cco2
+# 
+# head(cco2)
+# # hho2<-hho
+# colnames(cco2)<-paste0(colnames(cco2),"_", 1:ncol(cco2))
+# 
+# vlist<-list()
+# for(i in 1:ncol(cco2)){
+#   print(i)
+#   v1<-cco2 %>% 
+#     group_by_(colnames(cco2)[i]) %>% 
+#     count() %>% 
+#     mutate(question= colnames(cco2)[i])
+#   colnames(v1)<-c("Response", "Frequency", "Question")
+#   v1<-sapply(v1, as.character) %>% data.frame()
+#   vlist[[i]]<-v1}
+# 
+# 
+# vdf<-do.call("rbind", vlist)  
+# other_response_df<- vdf %>% dplyr::select(Question, Response, Frequency)  
+# aux_file_path_other_hh<- paste0(aux_path,"\\", Sys.Date(),"_OtherResponses_INDIVLevel.csv")
+# write.csv(other_response_df, aux_file_path_other_hh)
+```
+
+
+```{r eval=FALSE, echo=FALSE, results='asis'}
+t <- subset(HeaderYes, reported_date==date_current_download)
+t <- data.frame(enu_id=t$enumerator_id, t[,colnames(t[,sapply(t, typeof)=="character"])])
+reportlog<-chk4biv_others_values(t, otherpattern, enumeratorID = "enu_id", TRUE)
+ write.csv(reportlog, paste0("OtherValues_Header", date_current_download, ".csv"))
+```
+
+```{r eval=FALSE, echo=FALSE, results='asis'}
+t <- data.frame(enu_id=Aggregated1$enumerator_id, Aggregated1[,colnames(Aggregated1[,sapply(Aggregated1, typeof)=="character"])])
+debugonce(chk4biv_others_values)
+reportlog<-chk4biv_others_values(t, otherpattern, enumeratorID = "enu_id", TRUE) 
+write.csv(reportlog, paste0("OtherValues_Content", date_current_download, ".csv"))
+```
+
+
+
+
+
+```{r eval=FALSE, echo=FALSE, results='asis'}
+# Number of surveys per day by enumerator
+
+
+
+# reportlog<-chk6c_nb_survey(HeaderYes, surveydte, enumid)
+# kable(reportlog, "latex", longtable = T, booktabs = T, linesep = "") %>% kable_styling(latex_options = c("repeat_header"), position = "center")
+```
+
+
+
+
+```{r eval=FALSE, echo=FALSE, results='asis'}
+#Surveyors with very low or high productivity
+# sdvalue=2
+# reportlog<-chk6f_productivity(HeaderYes, enumid, surveydte, sdvalue)
+# if(nrow(reportlog)>0){
+#   kable(reportlog, "latex", booktabs = T, linesep = "") %>% kable_styling(position = "center")
+# } else {
+#   cat("no errors")
+# }
+```
+
+
+

@@ -1,0 +1,17 @@
+theme_reach_base <- theme(text=element_text(family="Arial Narrow"),
+                          plot.title=element_text(size=12),
+                          panel.border=element_blank(),
+                          strip.text=element_text(size=20),
+                          plot.background=element_rect(fill="white",color = NA),
+                          panel.background = element_rect("white"),
+                          panel.grid.major.y=element_line("black"),
+                          panel.grid.major.x=element_blank(),
+                          
+                          axis.ticks.x=element_line(),
+                          axis.title=element_text(size=10),
+                          axis.text.x=element_text(angle=60,hjust=1,size=11),
+                          axis.text.y=element_text(size=11,margin = margin(r=5)),
+                          legend.text = element_text(lineheight = .9,size = 9),
+                          legend.title = element_text(size=10),
+                          legend.key.height=unit(.5,"cm"),
+                          legend.position="right")

@@ -37,3 +37,17 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+#endings
+*.html
+*.log
+*.tex
+*.css
+
+#folders
+/GIS/*
+/scrap/*
+/data_analysis/input/*
+!/data_analysis/input/.gitkeep
+/data_analysis/output/*
+!/data_analysis/output/.gitkeep
+/data_checks/*

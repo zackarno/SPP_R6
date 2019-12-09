@@ -1,0 +1,53 @@
+---
+title: "Preliminary Graphics to check"
+author: "BGD GIS DATA UNIT"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    code_folding: hide
+    toc: true
+---
+
+```{r setup, include=TRUE, warning = FALSE, message=FALSE, fig.height=8}
+knitr::opts_chunk$set(echo = TRUE,
+                      message=FALSE,
+                      warning = FALSE)
+source("util_functions/theme_reach_base.R")
+library(dplyr)
+
+hh_simple_long_overall<-hh_simple_dap %>% tidyr::gather(key="indicator", value="indicator_value",respondent_gender.female:VAC_report_rowsum) %>% filter(level=="overall")
+
+
+hh_simple_long_overall$ind_match1<-gsub( "\\..*$", "", hh_simple_long_overall$indicator )
+hh_simple_long_overall$ind_match2<-ifelse(nchar(hh_simple_long_overall$ind_match1)<4, hh_simple_long_overall$indicator, hh_simple_long_overall$ind_match1)
+hh_simple_long_overall$ind_match3<- stringr::str_replace_all(hh_simple_long_overall$ind_match2,"\\.yes|\\.no|\\.female|\\.male|
+                                           \\.After Aug 2017|\\.Before Aug 2017","")
+
+hh_simple_long_joined_with_categories<-hh_simple_long_overall %>% left_join(sppdap, by=c("ind_match3"= "variable" ))
+hh_simple_long_joined_with_categories<-hh_simple_long_joined_with_categories %>%
+  group_by(indicator) %>% mutate(indicator_over1=any(indicator_value>1)) %>% filter(indicator_over1==FALSE)
+categorized_overall_hh_results_split<-split(hh_simple_long_joined_with_categories,hh_simple_long_joined_with_categories$Category)
+
+graph_list<-list()
+
+for(i in 1:length(categorized_overall_hh_results_split)){
+  sect_data_temp<-categorized_overall_hh_results_split[[i]] %>% 
+    filter(indicator_value<=1)
+  sector_temp<-unique(sect_data_temp$Category)
+  text_label_location<-max(sect_data_temp$indicator_value)+.05
+  graph_temp<-ggplot(sect_data_temp,aes(x=indicator, y=indicator_value))+geom_bar(aes(x=indicator, y=indicator_value, fill=indicator),stat="identity", position="dodge")+
+    geom_text(aes(y=text_label_location,label= round(indicator_value,2)),fontface=3,position = position_dodge(width = 0.9))+
+    ggtitle(sector_temp)+
+    coord_flip()+
+    scale_fill_discrete()+
+    theme_reach_base+theme(legend.position = "none")
+  graph_list[[sector_temp]]<-graph_temp
+  if(sector_temp!="PROTECTION"){print(graph_temp)}
+  }
+
+```
+
+```{r include=TRUE, warning = FALSE, message=FALSE, fig.height=30}
+print(graph_list$PROTECTION)
+```
+
