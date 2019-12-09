@@ -47,7 +47,7 @@ vignettes/*.pdf
 /GIS/*
 /scrap/*
 /data_analysis/input/*
-!data_analysis/input/.gitkeep
+!data_analysis/input/.keep
 /data_analysis/output/*
-!data_analysis/output/.gitkeep
+!data_analysis/output/.keep
 /data_checks/*
