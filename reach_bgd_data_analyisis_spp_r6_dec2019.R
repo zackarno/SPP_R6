@@ -285,9 +285,39 @@ prop.table(svytable(~ind_gender+i.age_group2, ind_svy_ob)) %>% data.frame()%>%
 
 
 #ONE PROP TABLE BREAKDOWN.
-prop.table(svytable(~ind_gender+camp+i.age_group2, ind_svy_ob)) %>% data.frame()%>%
-  mutate(age_group2=paste0("age_", i.age_group2)) %>% arrange(camp) %>% 
-  write.csv(paste0(output_path,isodate,"_Indiv_age_sex_breakdown_by_camp.csv"))
+
+srvyr::as_survey(ind_svy_ob) %>% 
+  group_by(ind_gender, camp) %>% 
+  summarise(survey_mean(.))
+butteR::mean_proportion_table(design = ind_svy_ob,list_of_variables = "ind_gender",
+                              aggregation_level = "camp"
+                              
+                                )
+
+
+
+
+#AGE SEX BREAKDOWN
+prop.table(svytable(~ind_gender+i.age_group2, ind_svy_ob)) %>%
+  data.frame()%>%
+  mutate(age_group2=paste0("age_", i.age_group2))  %>%
+  write.csv(paste0(output_path,isodate,"_Indiv_age_sex_breakdown.csv"))
+
+
+#AGE SEX BREAKDOWN BY CAMP - I THINK THEY WANT IT SO THEY CAN DO AN AGE-SEX POP PYRAMID PER CAMP SO THAT EACH
+#CAMP ADDS UP TO 100 % RATHER THAN THE "age_sex_camp_total_prop_table" i make in line 318
+age_sex_by_camp<-svyby(~interaction(ind_gender, i.age_group2),by= ~camp, design = ind_svy_ob, svymean) %>% data.frame() %>% select(-starts_with("se.")) %>% tidyr::gather(key="stat", value="val",interaction.ind_gender..i.age_group2.female.0:interaction.ind_gender..i.age_group2.male.60.)
+#check that it is all good! (yes)
+age_sex_by_camp %>% group_by(camp) %>% 
+  summarise(asdfg=sum(val))
+
+age_sex_by_camp %>% write.csv(paste0(output_path,isodate,"_Indiv_age_sex_breakdown_by_camp.csv"))
+
+
+
+age_sex_camp_total_prop_table <- prop.table(svytable(~ind_gender+camp+i.age_group2, ind_svy_ob)) %>%
+  data.frame()%>%
+  mutate(age_group2=paste0("age_", i.age_group2)) %>% arrange(camp) 
 
 #GENERATE SOME QUICK GRAPHS FOR AO TO INVESTIGATE/ CHECK FOR WEIRD DATA.
 rmarkdown::render('preliminary_analysis_graphics_for_quick_review.Rmd')
