@@ -161,27 +161,44 @@ dap_hh_double_subsets<-sppdap_hh %>% filter(!is.na(`subset 2`))
 dap_hh_double_subsets
  
 #THERE ARE ONLY TWO SO INSTEAD OF ITERATING, I WILL JUST DO IT THE SEPARATE
-double_subset_overall<-butteR::mean_proportion_table(design = HH_svy_ob,list_of_variables = "health_coping_strategy", aggregation_level = c("i.household_elderly_member","health_coping"),round_to = 2,return_confidence = FALSE,na_replace = FALSE)
-
+double_subset1_overall<-butteR::mean_proportion_table(design = HH_svy_ob,list_of_variables = "health_coping_strategy", aggregation_level = c("i.household_elderly_member","health_coping"),round_to = 2,return_confidence = FALSE,na_replace = FALSE) 
+double_subset1_by_camp<-butteR::mean_proportion_table(design = HH_svy_ob,list_of_variables = "health_coping_strategy", aggregation_level = c(strata,"i.household_elderly_member","health_coping"),round_to = 2,return_confidence = FALSE,na_replace = FALSE) 
 #REFORMAT
-hh_double_subset_overall_reformatted<-double_subset_overall %>% 
+double_subsets_to_bind<-list()
+double_subsets_to_bind$hh_double_subset1_overall_reformatted<-double_subset1_overall %>% 
   tidyr::gather(key="subset_1",value="subset_1_value", i.household_elderly_member) %>%
   tidyr::gather(key= "subset_2", value="subset_2_value",health_coping) %>%
   mutate(level="overall",level_value=NA) %>% 
   select(level, level_value,subset_1: subset_2_value,everything())    
 
+double_subsets_to_bind$hh_double_subset1_by_camp_reformatted<-double_subset1_by_camp %>% 
+  tidyr::gather(key="subset_1",value="subset_1_value", i.household_elderly_member) %>%
+  tidyr::gather(key= "subset_2", value="subset_2_value",health_coping) %>% 
+  mutate(level="camp") %>%rename(level_value=camp) %>% 
+  select(level,level_value, subset_1: subset_2_value,everything())    
+
 #BY CAMP
-double_subset_by_camp<-butteR::mean_proportion_table(design = HH_svy_ob,list_of_variables = "health_expense", aggregation_level = c(strata,"i.health_coping_pay","i.household_elderly_member"),round_to = 2,return_confidence = FALSE,na_replace = FALSE)
+double_subset2_overall<-butteR::mean_proportion_table(design = HH_svy_ob,list_of_variables = "health_expense", aggregation_level = c("i.health_coping_pay","i.household_elderly_member"),round_to = 2,return_confidence = FALSE,na_replace = FALSE)
+
+double_subset2_by_camp<-butteR::mean_proportion_table(design = HH_svy_ob,list_of_variables = "health_expense", aggregation_level = c(strata,"i.health_coping_pay","i.household_elderly_member"),round_to = 2,return_confidence = FALSE,na_replace = FALSE)
 
 #REFORMAT
-hh_double_subset_by_camp_reformatted<-double_subset_by_camp %>% 
+hh_double_subset2_overall_reformatted<-double_subset2_overall %>% 
+  tidyr::gather(key="subset_1",value="subset_1_value", i.health_coping_pay) %>%
+  tidyr::gather(key= "subset_2", value="subset_2_value",i.household_elderly_member) %>%
+  mutate(level="overall",level_value=NA) %>% 
+  select(level, level_value,subset_1: subset_2_value,everything())    
+
+
+hh_double_subset2_by_camp_reformatted<-double_subset2_by_camp %>% 
   tidyr::gather(key="subset_1",value="subset_1_value", i.health_coping_pay) %>%
   tidyr::gather(key= "subset_2", value="subset_2_value",i.household_elderly_member) %>% 
   mutate(level="camp") %>%rename(level_value=camp) %>% 
   select(level,level_value, subset_1: subset_2_value,everything())    
 
 #BIND TOGETHER ALL HH DOUBLE SUBSETS (ACTUALLY TRIPLE WHEN YOU INCLUDE BY CAMP)
-hh_double_subset_all<-bind_rows(list(hh_double_subset_overall_reformatted,hh_double_subset_by_camp_reformatted))
+# hh_double_subset_all<-bind_rows(list(hh_double_subset_overall_reformatted,hh_double_subset_by_camp_reformatted))
+hh_double_subset_all<-bind_rows(double_subsets_to_bind)
 write.csv(hh_double_subset_all,paste0(output_path,isodate,"_HH_Analysis_Double_Subset.csv"))
 
 
@@ -300,13 +317,13 @@ butteR::mean_proportion_table(design = ind_svy_ob,list_of_variables = "ind_gende
 #AGE SEX BREAKDOWN
 prop.table(svytable(~ind_gender+i.age_group2, ind_svy_ob)) %>%
   data.frame()%>%
-  mutate(age_group2=paste0("age_", i.age_group2))  %>%
+  mutate(age_group2=paste0("age_", i.age_group2)) %>%
   write.csv(paste0(output_path,isodate,"_Indiv_age_sex_breakdown.csv"))
 
 
 #AGE SEX BREAKDOWN BY CAMP - I THINK THEY WANT IT SO THEY CAN DO AN AGE-SEX POP PYRAMID PER CAMP SO THAT EACH
 #CAMP ADDS UP TO 100 % RATHER THAN THE "age_sex_camp_total_prop_table" i make in line 318
-age_sex_by_camp<-svyby(~interaction(ind_gender, i.age_group2),by= ~camp, design = ind_svy_ob, svymean) %>% data.frame() %>% select(-starts_with("se.")) %>% tidyr::gather(key="stat", value="val",interaction.ind_gender..i.age_group2.female.0:interaction.ind_gender..i.age_group2.male.60.)
+age_sex_by_camp<-svyby(~interaction(ind_gender, i.age_group2),by= ~camp, design = ind_svy_ob, svymean) %>% data.frame() %>% select(-starts_with("se.")) %>% tidyr::gather(key="stat", value="val",interaction.ind_gender..i.age_group2.female.0:interaction.ind_gender..i.age_group2.male.60.) %>% arrange(camp)
 #check that it is all good! (yes)
 age_sex_by_camp %>% group_by(camp) %>% 
   summarise(asdfg=sum(val))
