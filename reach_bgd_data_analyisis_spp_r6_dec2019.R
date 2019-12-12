@@ -85,6 +85,7 @@ sppdap_hh<-sppdap %>% filter(level=="household")
 # LOOK AT VARS WHERE THEY WANT TO TO REPLACE NA RATHER THAN SUBSET
 sppdap_na_replace<-sppdap %>% filter(!is.na(na_replace)& na_replace!="True NA" )
 
+
 spp_dap_na_repace_sm_options<-butteR::extract_sm_option_columns(df=HH_svy_ob$variables,
                                                                 name_vector = sppdap_na_replace$variable )
 sppdap_na_replace_fixed<-sppdap_na_replace %>% 
@@ -92,6 +93,7 @@ sppdap_na_replace_fixed<-sppdap_na_replace %>%
   mutate(var_to_analyze=ifelse(is.na(sm_options),variable,sm_options))
 
 vars_to_replace_na_with_no<-sppdap_na_replace_fixed$var_to_analyze  %>% unique()
+
 
 # since there are only 5 cases and each case  NA  = "no" I am just going too replace it in the data set
 HH_svy_ob$variables[,vars_to_replace_na_with_no]<-purrr::map( HH_svy_ob$variables[,vars_to_replace_na_with_no], function(x)ifelse(is.na(x), "no",x))
