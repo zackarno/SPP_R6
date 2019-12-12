@@ -96,7 +96,8 @@ vars_to_replace_na_with_no<-sppdap_na_replace_fixed$var_to_analyze  %>% unique()
 
 
 # since there are only 5 cases and each case  NA  = "no" I am just going too replace it in the data set
-HH_svy_ob$variables[,vars_to_replace_na_with_no]<-purrr::map( HH_svy_ob$variables[,vars_to_replace_na_with_no], function(x)ifelse(is.na(x), "no",x))
+HH_svy_ob$variables[,vars_to_replace_na_with_no]<-purrr::map( HH_svy_ob$variables[,vars_to_replace_na_with_no], function(x)ifelse(range(x,na.rm = TRUE)==range(0:1) & is.na(x), "0",ifelse(is.na(x), "no",x)))
+
 
 #THEY WANT CELLPHONE NUMBER (INTEGER) TO BE TREATED AS CATEGORICAL
 HH_svy_ob$variables$cellphone_function <-as.character(HH_svy_ob$variables$cellphone_function)
