@@ -84,11 +84,14 @@ sppdap_hh<-sppdap %>% filter(level=="household")
 
 # LOOK AT VARS WHERE THEY WANT TO TO REPLACE NA RATHER THAN SUBSET
 sppdap_na_replace<-sppdap %>% filter(!is.na(na_replace)& na_replace!="True NA" )
-sppdap_na_replace
+spp_dap_na_repace_sm_options<-extract_sm_options(sppdap_na_replace$variable, HH_svy_ob$variables)
+sppdap_na_replace_fixed<-sppdap_na_replace %>% 
+  left_join(spp_dap_na_repace_sm_options,by=c("variable"="parent_name")) %>%
+  mutate(var_to_analyze=ifelse(is.na(sm_options),variable,sm_options))
+vars_to_replace_na_with_no<-sppdap_na_replace_fixed$var_to_analyze  %>% unique()
 
-butteR::auto_detect_select_multiple()
 # since there are only 5 cases and each case  NA  = "no" I am just going too replace it in the data set
-HH_svy_ob$variables[,unique(sppdap_na_replace$variable)]<-purrr::map( HH_svy_ob$variables[,unique(sppdap_na_replace$variable)], function(x)ifelse(is.na(x), "no",x))
+HH_svy_ob$variables[,vars_to_replace_na_with_no]<-purrr::map( HH_svy_ob$variables[,vars_to_replace_na_with_no], function(x)ifelse(is.na(x), "no",x))
 
 #THEY WANT CELLPHONE NUMBER (INTEGER) TO BE TREATED AS CATEGORICAL
 HH_svy_ob$variables$cellphone_function <-as.character(HH_svy_ob$variables$cellphone_function)
@@ -183,14 +186,14 @@ double_subset2_overall<-butteR::mean_proportion_table(design = HH_svy_ob,list_of
 double_subset2_by_camp<-butteR::mean_proportion_table(design = HH_svy_ob,list_of_variables = "health_expense", aggregation_level = c(strata,"i.health_coping_pay","i.household_elderly_member"),round_to = 2,return_confidence = FALSE,na_replace = FALSE)
 
 #REFORMAT
-hh_double_subset2_overall_reformatted<-double_subset2_overall %>% 
+double_subsets_to_bind$hh_double_subset2_overall_reformatted<-double_subset2_overall %>% 
   tidyr::gather(key="subset_1",value="subset_1_value", i.health_coping_pay) %>%
   tidyr::gather(key= "subset_2", value="subset_2_value",i.household_elderly_member) %>%
   mutate(level="overall",level_value=NA) %>% 
   select(level, level_value,subset_1: subset_2_value,everything())    
 
 
-hh_double_subset2_by_camp_reformatted<-double_subset2_by_camp %>% 
+double_subsets_to_bind$hh_double_subset2_by_camp_reformatted<-double_subset2_by_camp %>% 
   tidyr::gather(key="subset_1",value="subset_1_value", i.health_coping_pay) %>%
   tidyr::gather(key= "subset_2", value="subset_2_value",i.household_elderly_member) %>% 
   mutate(level="camp") %>%rename(level_value=camp) %>% 
